@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+motor
+python-dotenv
+PyPDF2
+sentence-transformers
+scikit-learn
+rapidfuzz
+nltk
+mistralai
+numpy

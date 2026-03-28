@@ -1,0 +1,87 @@
+import streamlit as st
+import PyPDF2
+import io
+import os
+import faiss
+import numpy as np
+from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
+from mistralai import Mistral
+
+# ------------------ UI ------------------
+st.set_page_config(page_title="Chat with PDF (Mistral RAG)")
+st.title("📄 Chat with Your PDF using Mistral")
+
+uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+
+# ------------------ PDF Processing ------------------
+def extract_text_from_pdf(file):
+    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text() or ""
+    return text
+
+def chunk_text(text, chunk_size=500, overlap=100):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        start += chunk_size - overlap
+    return chunks
+
+# ------------------ Embedding Model ------------------
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+model = load_embedding_model()
+
+# ------------------ Mistral Client ------------------
+load_dotenv()
+client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
+
+# ------------------ Main Logic ------------------
+if uploaded_file:
+    text = extract_text_from_pdf(uploaded_file)
+    st.success("PDF processed successfully!")
+    st.write("Preview:", text[:500])
+
+    chunks = chunk_text(text)
+
+    chunk_embeddings = model.encode(chunks)
+    chunk_embeddings = np.array(chunk_embeddings)
+
+    dimension = chunk_embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
+    index.add(chunk_embeddings)
+
+    question = st.text_input("Ask a question about the PDF")
+
+    if question:
+        question_embedding = model.encode([question])
+        D, I = index.search(np.array(question_embedding), k=3)
+
+        retrieved_chunks = [chunks[i] for i in I[0]]
+        context = "\n\n".join(retrieved_chunks)
+
+        prompt = f"""
+Answer the question using ONLY the context below.
+
+Context:
+{context}
+
+Question:
+{question}
+"""
+
+        response = client.chat.complete(
+            model="mistral-large-latest",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2
+        )
+
+        answer = response.choices[0].message.content
+        st.subheader("📌 Answer")
+        st.write(answer)

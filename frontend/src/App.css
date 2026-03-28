@@ -1,0 +1,16 @@
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background-color: #0f0c08;
+}
+
+.glass-card {
+  padding: 40px !important;
+  border-radius: 16px !important;
+}
+
+.result-item {
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 15px;
+}
